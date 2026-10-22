@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-gray-50 font-sans text-gray-900 antialiased;
+}
+
+/* Leaflet necesita altura explícita en contenedores */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  z-index: 0;
+}
