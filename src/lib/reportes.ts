@@ -128,7 +128,6 @@ export async function listarReportes(): Promise<ReporteFuga[]> {
   const locales: ReporteFuga[] = obtenerColaReportes().map((item) => ({
     id: item.local_id,
     codigo: item.local_id,
-    pin_verificacion: '----',
     ...item.datos,
     referencia: item.datos.referencia || null,
     estado: 'Pendiente' as EstadoReporte,
@@ -143,7 +142,7 @@ export async function listarReportes(): Promise<ReporteFuga[]> {
 
   const { data, error } = await supabase
     .from('reportes_fugas')
-    .select('*')
+    .select('id, codigo, nombre_vecino, sector, lat, lng, descripcion, referencia, estado, creado_en, actualizado_en')
     .order('creado_en', { ascending: false });
 
   if (error) throw error;
@@ -152,12 +151,17 @@ export async function listarReportes(): Promise<ReporteFuga[]> {
 
 export interface ResultadoCreacion {
   codigo: string;
+  /** PIN de verificación (solo si el reporte se registró en el servidor). */
+  pin?: string;
   offline: boolean;
 }
 
 /**
  * Crea un reporte. Si no hay conexión (o Supabase no está configurado),
  * lo deja en la cola local para sincronización posterior.
+ *
+ * El código YAK-### y el PIN los genera el servidor dentro de la RPC
+ * `crear_reporte`; el cliente no puede elegirlos ni leerlos después.
  */
 export async function crearReporte(datos: NuevoReporte): Promise<ResultadoCreacion> {
   if (!supabase || !supabaseConfigurado || !navigator.onLine) {
@@ -165,22 +169,21 @@ export async function crearReporte(datos: NuevoReporte): Promise<ResultadoCreaci
     return { codigo: item.local_id, offline: true };
   }
 
-  const { data, error } = await supabase
-    .from('reportes_fugas')
-    .insert({
-      nombre_vecino: datos.nombre_vecino,
-      sector: datos.sector,
-      lat: datos.lat,
-      lng: datos.lng,
-      descripcion: datos.descripcion,
-      referencia: datos.referencia || null,
-      estado: 'Pendiente'
-    })
-    .select('codigo')
-    .single();
+  const { data, error } = await supabase.rpc('crear_reporte', {
+    p_nombre_vecino: datos.nombre_vecino,
+    p_sector: datos.sector,
+    p_lat: datos.lat,
+    p_lng: datos.lng,
+    p_descripcion: datos.descripcion,
+    p_referencia: datos.referencia || null
+  });
 
   if (error) throw error;
-  return { codigo: (data as { codigo: string }).codigo, offline: false };
+
+  const fila = (data as { codigo: string; pin_verificacion: string }[] | null)?.[0];
+  if (!fila) throw new Error('El servidor no devolvió el código del reporte');
+
+  return { codigo: fila.codigo, pin: fila.pin_verificacion, offline: false };
 }
 
 // ---------------------------------------------------------------
@@ -254,14 +257,13 @@ export async function sincronizarCola(): Promise<{ enviados: number; fallidos: n
   try {
     // 1) Reportes pendientes
     for (const item of obtenerColaReportes()) {
-      const { error } = await supabase.from('reportes_fugas').insert({
-        nombre_vecino: item.datos.nombre_vecino,
-        sector: item.datos.sector,
-        lat: item.datos.lat,
-        lng: item.datos.lng,
-        descripcion: item.datos.descripcion,
-        referencia: item.datos.referencia || null,
-        estado: 'Pendiente'
+      const { error } = await supabase.rpc('crear_reporte', {
+        p_nombre_vecino: item.datos.nombre_vecino,
+        p_sector: item.datos.sector,
+        p_lat: item.datos.lat,
+        p_lng: item.datos.lng,
+        p_descripcion: item.datos.descripcion,
+        p_referencia: item.datos.referencia || null
       });
       if (error) {
         fallidos += 1; // se queda en cola para reintentar

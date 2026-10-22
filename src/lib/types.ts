@@ -15,7 +15,12 @@ export const ROLES_AUTORIZADOS: RolSistema[] = ['Gasfitero Comunal', 'Presidente
 export interface ReporteFuga {
   id: string;
   codigo: string;
-  pin_verificacion: string;
+  /**
+   * PIN de verificación. Solo existe en los datos demo: la API ya no lo
+   * expone (migración 20261022_proteger_pin.sql). Se entrega únicamente
+   * al crear el reporte, a través de la RPC `crear_reporte`.
+   */
+  pin_verificacion?: string;
   nombre_vecino: string;
   sector: SectorQollana;
   lat: number;
@@ -47,7 +52,8 @@ export interface AuditoriaRegistro {
   accion_realizada: string;
   usuario_responsable: string;
   rol_responsable: RolSistema;
-  codigo_usado: string;
+  /** PIN usado en el cambio. Oculto para el cliente (solo visible al staff). */
+  codigo_usado?: string;
   creado_en: string;
 }
 

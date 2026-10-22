@@ -20,12 +20,14 @@ export function ReportarFuga({ onEnviado }: Props) {
   const [referencia, setReferencia] = useState('');
   const [pos, setPos] = useState(POSICION_INICIAL);
   const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState<{ codigo: string; pin?: string } | null>(null);
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
     setEnviando(true);
+    setResultado(null);
     try {
-      const resultado = await crearReporte({
+      const creado = await crearReporte({
         nombre_vecino: nombre.trim(),
         sector,
         lat: pos.lat,
@@ -33,14 +35,15 @@ export function ReportarFuga({ onEnviado }: Props) {
         descripcion: descripcion.trim(),
         referencia: referencia.trim()
       });
-      if (resultado.offline) {
+      if (creado.offline) {
         mostrar(
           'Sin conexión: tu reporte quedó guardado y se enviará automáticamente.',
           'offline'
         );
       } else {
-        mostrar(`Reporte registrado con el código ${resultado.codigo}.`, 'exito');
+        mostrar(`Reporte registrado: ${creado.codigo}. Guarda tu PIN de verificación.`, 'exito');
       }
+      setResultado({ codigo: creado.codigo, pin: creado.pin });
       setNombre('');
       setDescripcion('');
       setReferencia('');
@@ -124,6 +127,32 @@ export function ReportarFuga({ onEnviado }: Props) {
       <Button type="submit" disabled={enviando} className="w-full">
         {enviando ? 'Enviando…' : 'Enviar reporte'}
       </Button>
+
+      {resultado && (
+        <div className="rounded-2xl border border-sustainability-100 bg-sustainability-50 p-4 text-center">
+          <p className="text-xs font-semibold uppercase tracking-wide text-sustainability-600">
+            Reporte registrado
+          </p>
+          <p className="mt-1 text-2xl font-bold text-gray-900">{resultado.codigo}</p>
+
+          {resultado.pin ? (
+            <>
+              <p className="mt-2 text-xs font-semibold text-gray-600">PIN de verificación</p>
+              <p className="text-3xl font-extrabold tracking-[0.35em] text-sustainability-600">
+                {resultado.pin}
+              </p>
+              <p className="mt-2 text-xs text-gray-600">
+                Anota el código y el PIN: los necesitas para dar seguimiento. El PIN no se
+                vuelve a mostrar.
+              </p>
+            </>
+          ) : (
+            <p className="mt-2 text-xs text-gray-600">
+              Sin conexión: el código y el PIN definitivos se asignan al sincronizar.
+            </p>
+          )}
+        </div>
+      )}
 
       <p className="text-center text-xs text-gray-500">
         Al enviar recibirás un código de seguimiento (YAK-###) y un PIN de verificación.
