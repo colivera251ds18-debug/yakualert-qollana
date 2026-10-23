@@ -115,6 +115,28 @@ grant select (
 ) on public.historial_auditoria to anon, authenticated;
 
 -- ------------------------------------------------------------
--- 5. Recargar la caché de esquema de PostgREST
+-- 5. Sincronizar la secuencia de códigos YAK-###
+--
+-- Los datos de muestra se insertaron con `codigo` explícito, por lo que el
+-- trigger nunca consumió `codigo_fuga_seq` y quedó en 1. Sin este ajuste el
+-- primer reporte real intentaría generar 'YAK-001' y fallaría con:
+--   23505 duplicate key value violates unique constraint "reportes_fugas_codigo_key"
+-- ------------------------------------------------------------
+do $$
+declare
+  v_max int;
+begin
+  select coalesce(max((regexp_match(codigo, 'YAK-([0-9]+)'))[1]::int), 0)
+    into v_max
+    from public.reportes_fugas;
+
+  -- Con v_max > 0 el próximo nextval() devuelve v_max + 1.
+  -- Con la tabla vacía se reinicia en 1 (setval no admite 0).
+  perform setval('codigo_fuga_seq', greatest(v_max, 1), v_max > 0);
+end;
+$$;
+
+-- ------------------------------------------------------------
+-- 6. Recargar la caché de esquema de PostgREST
 -- ------------------------------------------------------------
 notify pgrst, 'reload schema';
